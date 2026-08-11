@@ -1,0 +1,28 @@
+{
+  "name": "@runmount/cli",
+  "version": "0.1.0",
+  "description": "Mount scoped agent context anywhere",
+  "type": "module",
+  "bin": {"runmount": "dist/index.js"},
+  "main": "dist/index.js",
+  "files": ["dist/index.js"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && node esbuild.mjs",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build"
+  },
+  "dependencies": {"zod": "^4.0.0"},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {"node": ">=22"},
+  "repository": {"type": "git", "url": "git+https://github.com/Runmount/runmount.git"},
+  "homepage": "https://runmount.com",
+  "bugs": {"url": "https://github.com/Runmount/runmount/issues"},
+  "license": "MIT",
+  "publishConfig": {"access": "public"}
+}
