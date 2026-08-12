@@ -56,9 +56,13 @@ export async function login() {
       request.on('data', (chunk) => { body += chunk; });
       request.on('end', () => {
         try {
-          const result = JSON.parse(body) as {state?: string; idToken?: string};
+          const contentType = request.headers['content-type'] ?? '';
+          const result = contentType.includes('application/x-www-form-urlencoded')
+            ? Object.fromEntries(new URLSearchParams(body)) as {state?: string; idToken?: string}
+            : JSON.parse(body) as {state?: string; idToken?: string};
           if (result.state !== state || !result.idToken) throw new Error('Invalid sign-in response.');
-          response.writeHead(204).end(); clearTimeout(timer); server.close(); resolve(result.idToken);
+          response.writeHead(200, {'content-type': 'text/html; charset=utf-8'}).end('<!doctype html><title>Runmount connected</title><p>Runmount CLI connected. You can close this tab.</p>');
+          clearTimeout(timer); server.close(); resolve(result.idToken);
         } catch (error) { response.writeHead(400).end(); reject(error); }
       });
     });
