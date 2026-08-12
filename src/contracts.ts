@@ -16,6 +16,9 @@ export const profileSchema = z.object({
   id: z.string(),
   name: profileNameSchema,
   ownerId: z.string(),
+  scope: z.enum(['personal', 'workspace']),
+  workspaceSlug: z.string().nullable(),
+  inherits: z.array(profileNameSchema),
   currentVersion: z.number().int().positive(),
   files: z.array(profileFileSchema),
   createdAt: z.string(),
@@ -25,7 +28,33 @@ export const profileSchema = z.object({
 
 export const bundleSchema = z.object({
   profile: profileSchema,
+  resolvedProfiles: z.array(profileSchema),
   files: z.array(z.object({path: contextPathSchema, contentBase64: z.string()})),
 });
 
+export const workspaceSchema = z.object({
+  slug: z.string(),
+  ownerId: z.string(),
+  role: z.enum(['owner', 'admin', 'member']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const runSchema = z.object({
+  id: z.string(),
+  profileId: z.string(),
+  profileName: profileNameSchema,
+  startedBy: z.string(),
+  parentRunId: z.string().nullable(),
+  runtime: z.string().nullable(),
+  command: z.array(z.string()),
+  status: z.enum(['running', 'succeeded', 'failed', 'cancelled']),
+  exitCode: z.number().int().nullable(),
+  createdAt: z.string(),
+  endedAt: z.string().nullable(),
+});
+
 export type Profile = z.infer<typeof profileSchema>;
+export type Bundle = z.infer<typeof bundleSchema>;
+export type Run = z.infer<typeof runSchema>;
+export type Workspace = z.infer<typeof workspaceSchema>;
