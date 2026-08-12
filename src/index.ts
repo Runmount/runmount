@@ -140,6 +140,7 @@ function usage() {
   login | logout
   whoami
   create <profile> [--from <profile>]
+  delete <profile> --yes
   list
   add <profile> <file-or-directory> [context-path]
   remove <profile> <context-path>
@@ -166,6 +167,13 @@ async function main() {
       const name = required(args[0], 'profile name');
       const inherits = optionValues(args.slice(1), '--from');
       printProfile(profileSchema.parse(await api('/v1/profiles', {method: 'POST', body: JSON.stringify({name, inherits})})));
+      return;
+    }
+    case 'delete': {
+      const name = required(args[0], 'profile name');
+      if (!args.includes('--yes')) throw new Error('Deleting a profile is permanent. Re-run with `--yes`.');
+      await api(`/v1/profiles/${encoded(name)}`, {method: 'DELETE'});
+      console.log(`Deleted profile ${name}.`);
       return;
     }
     case 'list': {

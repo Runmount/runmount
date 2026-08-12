@@ -32,6 +32,7 @@ directories. Runmount excludes secrets and generated directories such as
 # Inspect and materialize context.
 runmount list
 runmount show project-foo
+runmount delete project-foo --yes
 runmount mount project-foo
 
 # Inspect and resume recorded runs.
