@@ -9,6 +9,7 @@ import {bundleSchema, profileSchema, runSchema, workspaceSchema, type Bundle, ty
 
 const [, , command, ...args] = process.argv;
 const encoded = (value: string) => encodeURIComponent(value);
+const profileUrl = (name: string, suffix = '') => `/v1/profile${suffix}?name=${encoded(name)}`;
 const required = (value: string | undefined, label: string): string => {
   if (!value) throw new Error(`Missing ${label}.`);
   return value;
@@ -67,7 +68,7 @@ async function addPath(name: string, pathArg: string, contextRoot?: string) {
   for (const file of files) {
     const childPath = source.isDirectory() ? join(root, relative(absolute, file)) : root;
     const contentBase64 = (await readFile(file)).toString('base64');
-    profile = profileSchema.parse(await api(`/v1/profiles/${encoded(name)}/files`, {
+    profile = profileSchema.parse(await api(profileUrl(name, '/files'), {
       method: 'POST', body: JSON.stringify({path: childPath.replaceAll('\\', '/'), contentBase64}),
     }));
   }
@@ -87,8 +88,8 @@ async function materialize(bundle: Bundle) {
 }
 
 async function execute(name: string, childCommand: string, childArgs: string[], parentRunId?: string) {
-  const bundle = bundleSchema.parse(await api(`/v1/profiles/${encoded(name)}/bundle`));
-  const run = runSchema.parse(await api(`/v1/profiles/${encoded(name)}/runs`, {
+  const bundle = bundleSchema.parse(await api(profileUrl(name, '/bundle')));
+  const run = runSchema.parse(await api(profileUrl(name, '/runs'), {
     method: 'POST', body: JSON.stringify({runtime: basename(childCommand), command: [childCommand, ...childArgs], parentRunId}),
   }));
   const contextDir = await materialize(bundle);
@@ -172,7 +173,7 @@ async function main() {
     case 'delete': {
       const name = required(args[0], 'profile name');
       if (!args.includes('--yes')) throw new Error('Deleting a profile is permanent. Re-run with `--yes`.');
-      await api(`/v1/profiles/${encoded(name)}`, {method: 'DELETE'});
+      await api(profileUrl(name), {method: 'DELETE'});
       console.log(`Deleted profile ${name}.`);
       return;
     }
@@ -186,18 +187,18 @@ async function main() {
     case 'remove': {
       const name = required(args[0], 'profile name');
       const path = required(args[1], 'context path');
-      printProfile(profileSchema.parse(await api(`/v1/profiles/${encoded(name)}/files/${encoded(path)}`, {method: 'DELETE'})));
+      printProfile(profileSchema.parse(await api(`${profileUrl(name, '/files')}&path=${encoded(path)}`, {method: 'DELETE'})));
       return;
     }
     case 'show': {
       const name = required(args[0], 'profile name');
-      printProfile(profileSchema.parse(await api(`/v1/profiles/${encoded(name)}`)));
+      printProfile(profileSchema.parse(await api(profileUrl(name))));
       return;
     }
     case 'mount': {
       const name = required(args[0], 'profile name');
       const shell = args.includes('--shell');
-      const bundle = bundleSchema.parse(await api(`/v1/profiles/${encoded(name)}/bundle`));
+      const bundle = bundleSchema.parse(await api(profileUrl(name, '/bundle')));
       const contextDir = await materialize(bundle);
       if (shell) console.log(`export RUNMOUNT_CONTEXT_DIR=${JSON.stringify(contextDir)} RUNMOUNT_PROFILE=${JSON.stringify(name)}`);
       else console.log(`Mounted ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} from ${bundle.resolvedProfiles.length} profile${bundle.resolvedProfiles.length === 1 ? '' : 's'} at ${contextDir}\n\nSet RUNMOUNT_CONTEXT_DIR to this path before launching your agent, or use \`runmount exec ${name} -- <command>\`.`);
@@ -210,13 +211,13 @@ async function main() {
     }
     case 'runs': {
       if (args[0]) {
-        const runs = runSchema.array().parse(await api(`/v1/profiles/${encoded(args[0])}/runs`));
+        const runs = runSchema.array().parse(await api(profileUrl(args[0], '/runs')));
         if (!runs.length) console.log(`No runs for ${args[0]}.`);
         else runs.forEach(printRun);
       } else {
         const profiles = profileSchema.array().parse(await api('/v1/profiles'));
         for (const profile of profiles) {
-          const runs = runSchema.array().parse(await api(`/v1/profiles/${encoded(profile.name)}/runs`));
+          const runs = runSchema.array().parse(await api(profileUrl(profile.name, '/runs')));
           runs.forEach(printRun);
         }
       }
