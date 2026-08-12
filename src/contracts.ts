@@ -1,6 +1,7 @@
 import {z} from 'zod';
 
 export const workspaceSlugSchema = z.string().min(2).max(60).regex(/^[a-z0-9][a-z0-9-]*$/);
+export const workspaceDisplayNameSchema = z.string().trim().min(1).max(120);
 export const profileIdSchema = z.string().min(3).max(64).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
 export const profileReferenceSchema = z.string().min(3).max(126).regex(/^[a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*[a-z0-9])?$/);
 export const profileDisplayNameSchema = z.string().trim().min(1).max(120);
@@ -19,7 +20,8 @@ export const addFileSchema = z.object({
   path: contextPathSchema,
   contentBase64: z.string(),
 });
-export const createWorkspaceSchema = z.object({slug: workspaceSlugSchema});
+export const createWorkspaceSchema = z.object({displayName: workspaceDisplayNameSchema});
+export const updateWorkspaceSchema = z.object({displayName: workspaceDisplayNameSchema});
 export const workspaceRoleSchema = z.enum(['owner', 'admin', 'member']);
 export const manageableWorkspaceRoleSchema = z.enum(['admin', 'member']);
 export const addWorkspaceMemberSchema = z.object({
@@ -68,7 +70,8 @@ export const bundleSchema = z.object({
 });
 
 export const workspaceSchema = z.object({
-  slug: workspaceSlugSchema,
+  id: workspaceSlugSchema,
+  displayName: workspaceDisplayNameSchema,
   ownerId: z.string(),
   role: workspaceRoleSchema,
   createdAt: z.string(),

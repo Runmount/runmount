@@ -150,7 +150,7 @@ function usage() {
   exec <profile> -- <command>
   runs [profile]
   resume <run-id> -- <command>
-  org create <slug>
+  org create <display-name>
   org list
   org invite <workspace> <email> [admin|member]
   org members <workspace>
@@ -241,12 +241,12 @@ async function main() {
     case 'org': {
       const subcommand = required(args[0], 'org command');
       if (subcommand === 'create') {
-        const workspace = workspaceSchema.parse(await api('/v1/workspaces', {method: 'POST', body: JSON.stringify({slug: required(args[1], 'workspace slug')})}));
-        console.log(`${workspace.slug}  (${workspace.role})`);
+        const workspace = workspaceSchema.parse(await api('/v1/workspaces', {method: 'POST', body: JSON.stringify({displayName: required(args[1], 'organization name')})}));
+        console.log(`${workspace.displayName}  ·  ${workspace.id}  (${workspace.role})`);
       } else if (subcommand === 'list') {
         const workspaces = workspaceSchema.array().parse(await api('/v1/workspaces'));
-        if (!workspaces.length) console.log('No workspaces yet. Create one with `runmount org create <slug>`.');
-        else workspaces.forEach((workspace) => console.log(`${workspace.slug}  (${workspace.role})`));
+        if (!workspaces.length) console.log('No workspaces yet. Create one with `runmount org create "Organization name"`.');
+        else workspaces.forEach((workspace) => console.log(`${workspace.displayName}  ·  ${workspace.id}  (${workspace.role})`));
       } else if (subcommand === 'invite' && args[1] === 'revoke') {
         const workspace = required(args[2], 'workspace slug');
         const inviteId = required(args[3], 'invite ID');
