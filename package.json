@@ -1,6 +1,6 @@
 {
   "name": "@runmount/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Mount scoped agent context anywhere",
   "type": "module",
   "bin": {
