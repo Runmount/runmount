@@ -45,10 +45,23 @@ runmount whoami
 runmount create acme/design
 ```
 
-Workspace owners and admins can add a member by Firebase user ID:
+Invite teammates by email. They join automatically the next time they sign in:
 
 ```bash
-runmount org member add acme <firebase-user-id> member
+runmount org invite acme teammate@company.com member
+runmount org invite acme lead@company.com admin
+runmount org members acme
+runmount org invites acme
+```
+
+Owners and admins can change roles, revoke pending invitations, or remove a
+member. Firebase UID membership commands remain available for migrations and
+automation, but teams do not need them for ordinary onboarding.
+
+```bash
+runmount org member role acme <firebase-user-id> admin
+runmount org member remove acme <firebase-user-id>
+runmount org invite revoke acme <invite-id>
 ```
 
 Third-party service authorization (`runmount auth github`, etc.) is not part of

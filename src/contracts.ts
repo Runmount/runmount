@@ -40,6 +40,22 @@ export const workspaceSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const workspaceMemberSchema = z.object({
+  uid: z.string(),
+  email: z.string().nullable(),
+  role: z.enum(['owner', 'admin', 'member']),
+  createdAt: z.string(),
+});
+
+export const workspaceInviteSchema = z.object({
+  id: z.string(),
+  workspaceSlug: z.string(),
+  email: z.string(),
+  role: z.enum(['admin', 'member']),
+  invitedBy: z.string(),
+  createdAt: z.string(),
+});
+
 export const runSchema = z.object({
   id: z.string(),
   profileId: z.string(),
@@ -58,3 +74,5 @@ export type Profile = z.infer<typeof profileSchema>;
 export type Bundle = z.infer<typeof bundleSchema>;
 export type Run = z.infer<typeof runSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
+export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
+export type WorkspaceInvite = z.infer<typeof workspaceInviteSchema>;

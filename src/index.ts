@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join, relative, resolve} from 'node:path';
 import {api} from './api.js';
 import {login, logout} from './auth.js';
-import {bundleSchema, profileSchema, runSchema, workspaceSchema, type Bundle, type Profile, type Run} from './contracts.js';
+import {bundleSchema, profileSchema, runSchema, workspaceInviteSchema, workspaceMemberSchema, workspaceSchema, type Bundle, type Profile, type Run} from './contracts.js';
 
 const [, , command, ...args] = process.argv;
 const encoded = (value: string) => encodeURIComponent(value);
@@ -152,7 +152,13 @@ function usage() {
   resume <run-id> -- <command>
   org create <slug>
   org list
-  org member add <workspace> <firebase-uid> [owner|admin|member]`);
+  org invite <workspace> <email> [admin|member]
+  org members <workspace>
+  org member role <workspace> <firebase-uid> [admin|member]
+  org member remove <workspace> <firebase-uid>
+  org invites <workspace>
+  org invite revoke <workspace> <invite-id>
+  org member add <workspace> <firebase-uid> [admin|member]`);
 }
 
 async function main() {
@@ -239,13 +245,44 @@ async function main() {
         const workspaces = workspaceSchema.array().parse(await api('/v1/workspaces'));
         if (!workspaces.length) console.log('No workspaces yet. Create one with `runmount org create <slug>`.');
         else workspaces.forEach((workspace) => console.log(`${workspace.slug}  (${workspace.role})`));
+      } else if (subcommand === 'invite' && args[1] === 'revoke') {
+        const workspace = required(args[2], 'workspace slug');
+        const inviteId = required(args[3], 'invite ID');
+        await api(`/v1/workspaces/${encoded(workspace)}/invites/${encoded(inviteId)}`, {method: 'DELETE'});
+        console.log(`Revoked invitation ${inviteId}.`);
+      } else if (subcommand === 'invite') {
+        const workspace = required(args[1], 'workspace slug');
+        const email = required(args[2], 'teammate email');
+        const role = args[3] ?? 'member';
+        const invite = workspaceInviteSchema.parse(await api(`/v1/workspaces/${encoded(workspace)}/invites`, {method: 'POST', body: JSON.stringify({email, role})}));
+        console.log(`Invited ${invite.email} to ${workspace} as ${invite.role}. They join automatically the next time they sign in.`);
+      } else if (subcommand === 'invites') {
+        const workspace = required(args[1], 'workspace slug');
+        const invites = workspaceInviteSchema.array().parse(await api(`/v1/workspaces/${encoded(workspace)}/invites`));
+        if (!invites.length) console.log(`No pending invitations for ${workspace}.`);
+        else invites.forEach((invite) => console.log(`${invite.email}  (${invite.role})  ${invite.id}`));
+      } else if (subcommand === 'members') {
+        const workspace = required(args[1], 'workspace slug');
+        const members = workspaceMemberSchema.array().parse(await api(`/v1/workspaces/${encoded(workspace)}/members`));
+        members.forEach((member) => console.log(`${member.email ?? member.uid}  (${member.role})  ${member.uid}`));
+      } else if (subcommand === 'member' && args[1] === 'role') {
+        const workspace = required(args[2], 'workspace slug');
+        const memberUid = required(args[3], 'Firebase user ID');
+        const role = required(args[4], 'admin or member role');
+        const member = workspaceMemberSchema.parse(await api(`/v1/workspaces/${encoded(workspace)}/members/${encoded(memberUid)}`, {method: 'PATCH', body: JSON.stringify({role})}));
+        console.log(`Updated ${member.email ?? member.uid} to ${member.role}.`);
+      } else if (subcommand === 'member' && args[1] === 'remove') {
+        const workspace = required(args[2], 'workspace slug');
+        const memberUid = required(args[3], 'Firebase user ID');
+        await api(`/v1/workspaces/${encoded(workspace)}/members/${encoded(memberUid)}`, {method: 'DELETE'});
+        console.log(`Removed ${memberUid} from ${workspace}.`);
       } else if (subcommand === 'member' && args[1] === 'add') {
         const workspace = required(args[2], 'workspace slug');
         const uid = required(args[3], 'Firebase user ID');
         const role = args[4] ?? 'member';
         await api(`/v1/workspaces/${encoded(workspace)}/members`, {method: 'POST', body: JSON.stringify({uid, role})});
         console.log(`Added ${uid} to ${workspace} as ${role}.`);
-      } else throw new Error('Usage: runmount org create <slug> | list | member add <workspace> <firebase-uid> [role]');
+      } else throw new Error('Usage: runmount org create | list | invite | invites | members | member role | member remove');
       return;
     }
     default: usage();
