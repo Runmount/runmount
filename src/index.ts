@@ -9,7 +9,7 @@ import {bundleSchema, profileSchema, runSchema, workspaceInviteSchema, workspace
 
 const [, , command, ...args] = process.argv;
 const encoded = (value: string) => encodeURIComponent(value);
-const profileUrl = (name: string, suffix = '') => `/v1/profile${suffix}?name=${encoded(name)}`;
+const profileUrl = (reference: string, suffix = '') => `/v1/profile${suffix}?profile=${encoded(reference)}`;
 const required = (value: string | undefined, label: string): string => {
   if (!value) throw new Error(`Missing ${label}.`);
   return value;
@@ -20,8 +20,8 @@ const ignoredFiles = new Set(['.ds_store', 'id_rsa']);
 const sensitiveNames = [/^\.env(?:\.|$)/i, /credential/i, /secret/i, /token/i, /\.pem$/i, /\.key$/i, /^id_[a-z0-9_-]+$/i];
 
 function printProfile(profile: Profile) {
-  const scope = profile.workspaceSlug ? `workspace ${profile.workspaceSlug}` : 'personal';
-  console.log(`${profile.name}  v${profile.currentVersion}  (${scope})`);
+  const reference = profile.workspaceSlug ? `${profile.workspaceSlug}/${profile.id}` : profile.id;
+  console.log(`${profile.displayName}  ·  ${reference}  ·  v${profile.currentVersion}`);
   if (profile.inherits.length) console.log(`  Inherits: ${profile.inherits.join(', ')}`);
   if (!profile.files.length) console.log('  No files');
   for (const file of profile.files) console.log(`  ${file.path}  ${file.size} bytes`);
@@ -30,7 +30,7 @@ function printProfile(profile: Profile) {
 function printRun(run: Run) {
   const runtime = run.runtime ? ` · ${run.runtime}` : '';
   const parent = run.parentRunId ? ` · resumed from ${run.parentRunId}` : '';
-  console.log(`${run.id}  ${run.status}${runtime}${parent}\n  ${run.profileName} · ${run.createdAt}`);
+  console.log(`${run.id}  ${run.status}${runtime}${parent}\n  ${run.profileDisplayName} · ${run.createdAt}`);
 }
 
 function shouldSkip(path: string, isDirectory: boolean) {
@@ -140,7 +140,7 @@ function usage() {
 
   login | logout
   whoami
-  create <profile> [--from <profile>]
+  create <organization> <display-name> [--from <profile>]
   delete <profile> --yes
   list
   add <profile> <file-or-directory> [context-path]
@@ -171,9 +171,10 @@ async function main() {
       return;
     }
     case 'create': {
-      const name = required(args[0], 'profile name');
-      const inherits = optionValues(args.slice(1), '--from');
-      printProfile(profileSchema.parse(await api('/v1/profiles', {method: 'POST', body: JSON.stringify({name, inherits})})));
+      const workspaceSlug = required(args[0], 'organization');
+      const displayName = required(args[1], 'display name');
+      const inherits = optionValues(args.slice(2), '--from');
+      printProfile(profileSchema.parse(await api('/v1/profiles', {method: 'POST', body: JSON.stringify({workspaceSlug, displayName, inherits})})));
       return;
     }
     case 'delete': {
@@ -185,7 +186,7 @@ async function main() {
     }
     case 'list': {
       const profiles = profileSchema.array().parse(await api('/v1/profiles'));
-      if (!profiles.length) console.log('No profiles yet. Create one with `runmount create <name>`.');
+      if (!profiles.length) console.log('No profiles yet. Create one with `runmount create <organization> "Display name"`.');
       else profiles.forEach(printProfile);
       return;
     }
@@ -223,7 +224,8 @@ async function main() {
       } else {
         const profiles = profileSchema.array().parse(await api('/v1/profiles'));
         for (const profile of profiles) {
-          const runs = runSchema.array().parse(await api(profileUrl(profile.name, '/runs')));
+          const reference = profile.workspaceSlug ? `${profile.workspaceSlug}/${profile.id}` : profile.id;
+          const runs = runSchema.array().parse(await api(profileUrl(reference, '/runs')));
           runs.forEach(printRun);
         }
       }
@@ -233,7 +235,7 @@ async function main() {
       const separator = args.indexOf('--');
       if (separator < 1) throw new Error('Usage: runmount resume <run-id> -- <command>');
       const prior = runSchema.parse(await api(`/v1/runs/${encoded(required(args[0], 'run id'))}`));
-      await execute(prior.profileName, required(args[separator + 1], 'command after --'), args.slice(separator + 2), prior.id);
+      await execute(prior.profileReference, required(args[separator + 1], 'command after --'), args.slice(separator + 2), prior.id);
       return;
     }
     case 'org': {
