@@ -172,7 +172,9 @@ function usage() {
   service list [--workspace <workspace>]
   service remove <connection-id>
   profile service add <profile> <provider> <workspace|executing-user|specific|runtime> [connection-id]
-  profile overlay add <profile> <provider> <specific|runtime> [connection-id]`);
+  profile service remove <profile> <provider>
+  profile overlay add <profile> <provider> <specific|runtime> [connection-id]
+  profile overlay remove <profile> <provider>`);
 }
 
 async function main() {
@@ -293,23 +295,39 @@ async function main() {
       const action = required(args[1], 'profile service action');
       const reference = required(args[2], 'profile');
       const provider = required(args[3], 'service provider').toLowerCase();
-      const mode = required(args[4], 'binding mode');
-      const connectionId = args[5];
       if (target === 'service' && action === 'add') {
+        const mode = required(args[4], 'binding mode');
+        const connectionId = args[5];
         const profile = profileSchema.parse(await api(profileUrl(reference)));
         const bindings = [...profile.serviceBindings.filter((binding) => binding.provider !== provider), {provider, mode, connectionId, required: true}];
         await api(profileUrl(reference, '/services'), {method: 'PUT', body: JSON.stringify({bindings})});
         console.log(`Attached ${provider} to ${reference}.`);
         return;
       }
+      if (target === 'service' && action === 'remove') {
+        const profile = profileSchema.parse(await api(profileUrl(reference)));
+        const bindings = profile.serviceBindings.filter((binding) => binding.provider !== provider);
+        await api(profileUrl(reference, '/services'), {method: 'PUT', body: JSON.stringify({bindings})});
+        console.log(`Removed ${provider} from ${reference}.`);
+        return;
+      }
       if (target === 'overlay' && action === 'add') {
+        const mode = required(args[4], 'binding mode');
+        const connectionId = args[5];
         const current = await api<{bindings: unknown[]}>(profileUrl(reference, '/overlay'));
         const bindings = [...current.bindings.filter((binding) => typeof binding === 'object' && binding !== null && (binding as {provider?: string}).provider !== provider), {provider, mode, connectionId, required: true}];
         await api(profileUrl(reference, '/overlay'), {method: 'PUT', body: JSON.stringify({bindings})});
         console.log(`Added your personal ${provider} overlay to ${reference}.`);
         return;
       }
-      throw new Error('Usage: runmount profile service add | overlay add');
+      if (target === 'overlay' && action === 'remove') {
+        const current = await api<{bindings: unknown[]}>(profileUrl(reference, '/overlay'));
+        const bindings = current.bindings.filter((binding) => typeof binding !== 'object' || binding === null || (binding as {provider?: string}).provider !== provider);
+        await api(profileUrl(reference, '/overlay'), {method: 'PUT', body: JSON.stringify({bindings})});
+        console.log(`Removed your personal ${provider} overlay from ${reference}.`);
+        return;
+      }
+      throw new Error('Usage: runmount profile service add | remove | overlay add | remove');
     }
     case 'org': {
       const subcommand = required(args[0], 'org command');

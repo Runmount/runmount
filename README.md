@@ -80,6 +80,14 @@ runmount profile overlay add acme/design figma specific <connection-id>
 runmount exec acme/design -- codex
 ```
 
+Remove a service from a shared profile or your personal overlay without deleting
+the underlying connection:
+
+```bash
+runmount profile service remove acme/design linear
+runmount profile overlay remove acme/design figma
+```
+
 Personal service connections are private by default. Use `--with` to compose a
 personal profile into the same agent run:
 
