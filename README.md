@@ -43,6 +43,7 @@ runmount resume run_abc123 -- codex
 runmount org create acme
 runmount whoami
 runmount create acme/design
+runmount personal create "My design tools"
 ```
 
 Invite teammates by email. They join automatically the next time they sign in:
@@ -64,9 +65,29 @@ runmount org member remove acme <firebase-user-id>
 runmount org invite revoke acme <invite-id>
 ```
 
-Third-party service authorization (`runmount auth github`, etc.) is not part of
-the current release. Do not add tokens, credentials, or `.env` files to a
-profile.
+Service credentials are stored separately from profile files. Connect an API-key
+service without putting its value in shell history, then bind it to a shared
+profile or add it privately as an overlay:
+
+```bash
+export LINEAR_API_KEY=lin_api_...
+runmount service connect linear --api-key-env LINEAR_API_KEY --workspace acme
+runmount profile service add acme/design linear workspace <connection-id>
+
+export FIGMA_TOKEN=figd_...
+runmount service connect figma --api-key-env FIGMA_TOKEN
+runmount profile overlay add acme/design figma specific <connection-id>
+runmount exec acme/design -- codex
+```
+
+Personal service connections are private by default. Use `--with` to compose a
+personal profile into the same agent run:
+
+```bash
+runmount exec acme/design --with my-design-tools -- codex
+```
+
+Do not add tokens, credentials, or `.env` files to a profile.
 
 Run `runmount` without arguments to see all available commands.
 

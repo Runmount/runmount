@@ -16,6 +16,11 @@ export const createProfileSchema = z.object({
   inherits: z.array(profileReferenceSchema).max(20).default([]),
 });
 export const updateProfileSchema = z.object({displayName: profileDisplayNameSchema});
+export const serviceProviderSchema = z.string().trim().min(2).max(64).regex(/^[a-z0-9][a-z0-9-]*$/);
+export const connectionIdSchema = z.string().min(8).max(80).regex(/^connection_[a-z0-9]+$/);
+export const serviceBindingModeSchema = z.enum(['workspace', 'executing-user', 'specific', 'runtime']);
+export const serviceBindingSchema = z.object({provider: serviceProviderSchema, mode: serviceBindingModeSchema, connectionId: connectionIdSchema.optional(), required: z.boolean().default(true)});
+export const connectionSchema = z.object({id: connectionIdSchema, provider: serviceProviderSchema, displayName: z.string(), scope: z.enum(['personal', 'workspace']), workspaceSlug: workspaceSlugSchema.nullable(), ownerId: z.string(), authType: z.enum(['api-key', 'oauth']), environmentVariable: z.string(), status: z.enum(['active', 'revoked']), createdAt: z.string(), updatedAt: z.string(), lastUsedAt: z.string().nullable()});
 export const addFileSchema = z.object({
   path: contextPathSchema,
   contentBase64: z.string(),
@@ -62,6 +67,7 @@ export const profileSchema = z.object({
   inherits: z.array(profileIdSchema),
   currentVersion: z.number().int().positive(),
   files: z.array(profileFileSchema),
+  serviceBindings: z.array(serviceBindingSchema).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
   schemaVersion: z.literal(1),
@@ -71,6 +77,7 @@ export const bundleSchema = z.object({
   profile: profileSchema,
   resolvedProfiles: z.array(profileSchema),
   files: z.array(z.object({path: contextPathSchema, contentBase64: z.string()})),
+  serviceCredentials: z.array(z.object({provider: serviceProviderSchema, connectionId: connectionIdSchema, environmentVariable: z.string(), secret: z.string()})).default([]),
 });
 
 export const workspaceSchema = z.object({
@@ -114,6 +121,7 @@ export const runSchema = z.object({
 });
 
 export type Profile = z.infer<typeof profileSchema>;
+export type Connection = z.infer<typeof connectionSchema>;
 export type ProfileFile = z.infer<typeof profileFileSchema>;
 export type Bundle = z.infer<typeof bundleSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;

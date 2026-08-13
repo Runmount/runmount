@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join, relative, resolve} from 'node:path';
 import {api} from './api.js';
 import {login, logout} from './auth.js';
-import {bundleSchema, profileSchema, runSchema, workspaceInviteSchema, workspaceMemberSchema, workspaceSchema, type Bundle, type Profile, type Run} from './contracts.js';
+import {bundleSchema, connectionSchema, profileSchema, runSchema, workspaceInviteSchema, workspaceMemberSchema, workspaceSchema, type Bundle, type Connection, type Profile, type Run} from './contracts.js';
 
 const [, , command, ...args] = process.argv;
 const encoded = (value: string) => encodeURIComponent(value);
@@ -87,13 +87,14 @@ async function materialize(bundle: Bundle) {
   return contextDir;
 }
 
-async function execute(name: string, childCommand: string, childArgs: string[], parentRunId?: string) {
-  const bundle = bundleSchema.parse(await api(profileUrl(name, '/bundle')));
+async function execute(name: string, childCommand: string, childArgs: string[], parentRunId?: string, withProfiles: string[] = []) {
+  const withQuery = withProfiles.map((profile) => `&with=${encoded(profile)}`).join('');
+  const bundle = bundleSchema.parse(await api(`${profileUrl(name, '/bundle')}${withQuery}`));
   const run = runSchema.parse(await api(profileUrl(name, '/runs'), {
     method: 'POST', body: JSON.stringify({runtime: basename(childCommand), command: [childCommand, ...childArgs], parentRunId}),
   }));
   const contextDir = await materialize(bundle);
-  console.log(`Runmount run ${run.id}\nMounted ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} from ${bundle.resolvedProfiles.length} profile${bundle.resolvedProfiles.length === 1 ? '' : 's'} for ${name}.`);
+  console.log(`Runmount run ${run.id}\nMounted ${bundle.files.length} file${bundle.files.length === 1 ? '' : 's'} from ${bundle.resolvedProfiles.length} profile${bundle.resolvedProfiles.length === 1 ? '' : 's'} for ${name}.${bundle.serviceCredentials.length ? ` Loaded ${bundle.serviceCredentials.length} service credential${bundle.serviceCredentials.length === 1 ? '' : 's'}.` : ''}`);
   try {
     const exitCode = await new Promise<number>((resolveExit) => {
       const child = spawn(childCommand, childArgs, {
@@ -105,6 +106,8 @@ async function execute(name: string, childCommand: string, childArgs: string[], 
           RUNMOUNT_PROFILE: name,
           RUNMOUNT_RUN_ID: run.id,
           RUNMOUNT_ORIGINAL_CWD: process.cwd(),
+          RUNMOUNT_SERVICES: bundle.serviceCredentials.map((service) => service.provider).join(','),
+          ...Object.fromEntries(bundle.serviceCredentials.map((service) => [service.environmentVariable, service.secret])),
         },
       });
       child.on('error', (error) => { console.error(error.message); resolveExit(1); });
@@ -124,7 +127,7 @@ async function execute(name: string, childCommand: string, childArgs: string[], 
 function commandAfterSeparator(values: string[]) {
   const separator = values.indexOf('--');
   if (separator < 1) throw new Error('Usage: runmount exec <profile> -- <command>');
-  return {name: required(values[0], 'profile name'), childCommand: required(values[separator + 1], 'command after --'), childArgs: values.slice(separator + 2)};
+  return {name: required(values[0], 'profile name'), withProfiles: optionValues(values.slice(1, separator), '--with'), childCommand: required(values[separator + 1], 'command after --'), childArgs: values.slice(separator + 2)};
 }
 
 function optionValues(values: string[], flag: string) {
@@ -135,12 +138,17 @@ function optionValues(values: string[], flag: string) {
   return result;
 }
 
+function optionValue(values: string[], flag: string): string | undefined { return optionValues(values, flag).at(-1); }
+function serviceEnvironmentVariable(provider: string) { return `${provider.replaceAll(/[^a-z0-9]+/gi, '_').toUpperCase()}_API_KEY`; }
+function printConnection(connection: Connection) { console.log(`${connection.displayName}  ·  ${connection.provider}  ·  ${connection.scope}${connection.workspaceSlug ? ` (${connection.workspaceSlug})` : ''}  ·  ${connection.id}`); }
+
 function usage() {
   console.log(`Runmount
 
   login | logout
   whoami
   create <organization> <display-name> [--from <profile>]
+  personal create <display-name> [--from <profile>]
   delete <profile> --yes
   list
   add <profile> <file-or-directory> [context-path]
@@ -148,6 +156,7 @@ function usage() {
   show <profile>
   mount <profile> [--shell]
   exec <profile> -- <command>
+  exec <profile> --with <personal-profile> -- <command>
   runs [profile]
   resume <run-id> -- <command>
   org create <display-name>
@@ -158,7 +167,12 @@ function usage() {
   org member remove <workspace> <firebase-uid>
   org invites <workspace>
   org invite revoke <workspace> <invite-id>
-  org member add <workspace> <firebase-uid> [admin|member]`);
+  org member add <workspace> <firebase-uid> [admin|member]
+  service connect <provider> --api-key-env <ENV_VAR> [--workspace <workspace>] [--name <name>] [--env <ENV_VAR>]
+  service list [--workspace <workspace>]
+  service remove <connection-id>
+  profile service add <profile> <provider> <workspace|executing-user|specific|runtime> [connection-id]
+  profile overlay add <profile> <provider> <specific|runtime> [connection-id]`);
 }
 
 async function main() {
@@ -175,6 +189,13 @@ async function main() {
       const displayName = required(args[1], 'display name');
       const inherits = optionValues(args.slice(2), '--from');
       printProfile(profileSchema.parse(await api('/v1/profiles', {method: 'POST', body: JSON.stringify({workspaceSlug, displayName, inherits})})));
+      return;
+    }
+    case 'personal': {
+      if (args[0] !== 'create') throw new Error('Usage: runmount personal create <display-name> [--from <profile>]');
+      const displayName = required(args[1], 'display name');
+      const inherits = optionValues(args.slice(2), '--from');
+      printProfile(profileSchema.parse(await api('/v1/personal/profiles', {method: 'POST', body: JSON.stringify({displayName, inherits})})));
       return;
     }
     case 'delete': {
@@ -213,7 +234,7 @@ async function main() {
     }
     case 'exec': {
       const parsed = commandAfterSeparator(args);
-      await execute(parsed.name, parsed.childCommand, parsed.childArgs);
+      await execute(parsed.name, parsed.childCommand, parsed.childArgs, undefined, parsed.withProfiles);
       return;
     }
     case 'runs': {
@@ -237,6 +258,58 @@ async function main() {
       const prior = runSchema.parse(await api(`/v1/runs/${encoded(required(args[0], 'run id'))}`));
       await execute(prior.profileReference, required(args[separator + 1], 'command after --'), args.slice(separator + 2), prior.id);
       return;
+    }
+    case 'service': {
+      const subcommand = required(args[0], 'service command');
+      if (subcommand === 'connect') {
+        const provider = required(args[1], 'service provider').toLowerCase();
+        const secretEnvironmentVariable = required(optionValue(args.slice(2), '--api-key-env'), '--api-key-env');
+        const secret = process.env[secretEnvironmentVariable];
+        if (!secret) throw new Error(`${secretEnvironmentVariable} is not set in this shell.`);
+        const workspaceSlug = optionValue(args.slice(2), '--workspace');
+        const displayName = optionValue(args.slice(2), '--name') ?? provider;
+        const environmentVariable = optionValue(args.slice(2), '--env') ?? serviceEnvironmentVariable(provider);
+        const connection = connectionSchema.parse(await api('/v1/connections', {method: 'POST', body: JSON.stringify({provider, displayName, scope: workspaceSlug ? 'workspace' : 'personal', workspaceSlug, authType: 'api-key', environmentVariable, secret})}));
+        printConnection(connection);
+        return;
+      }
+      if (subcommand === 'list') {
+        const workspaceSlug = optionValue(args.slice(1), '--workspace');
+        const query = workspaceSlug ? `?workspace=${encoded(workspaceSlug)}` : '';
+        const connections = connectionSchema.array().parse(await api(`/v1/connections${query}`));
+        if (!connections.length) console.log('No service connections yet.'); else connections.forEach(printConnection);
+        return;
+      }
+      if (subcommand === 'remove') {
+        const id = required(args[1], 'connection ID');
+        await api(`/v1/connections/${encoded(id)}`, {method: 'DELETE'});
+        console.log(`Removed service connection ${id}.`);
+        return;
+      }
+      throw new Error('Usage: runmount service connect | list | remove');
+    }
+    case 'profile': {
+      const target = required(args[0], 'profile command');
+      const action = required(args[1], 'profile service action');
+      const reference = required(args[2], 'profile');
+      const provider = required(args[3], 'service provider').toLowerCase();
+      const mode = required(args[4], 'binding mode');
+      const connectionId = args[5];
+      if (target === 'service' && action === 'add') {
+        const profile = profileSchema.parse(await api(profileUrl(reference)));
+        const bindings = [...profile.serviceBindings.filter((binding) => binding.provider !== provider), {provider, mode, connectionId, required: true}];
+        await api(profileUrl(reference, '/services'), {method: 'PUT', body: JSON.stringify({bindings})});
+        console.log(`Attached ${provider} to ${reference}.`);
+        return;
+      }
+      if (target === 'overlay' && action === 'add') {
+        const current = await api<{bindings: unknown[]}>(profileUrl(reference, '/overlay'));
+        const bindings = [...current.bindings.filter((binding) => typeof binding === 'object' && binding !== null && (binding as {provider?: string}).provider !== provider), {provider, mode, connectionId, required: true}];
+        await api(profileUrl(reference, '/overlay'), {method: 'PUT', body: JSON.stringify({bindings})});
+        console.log(`Added your personal ${provider} overlay to ${reference}.`);
+        return;
+      }
+      throw new Error('Usage: runmount profile service add | overlay add');
     }
     case 'org': {
       const subcommand = required(args[0], 'org command');
