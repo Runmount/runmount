@@ -24,7 +24,7 @@ function printProfile(profile: Profile) {
   console.log(`${profile.displayName}  ·  ${reference}  ·  v${profile.currentVersion}`);
   if (profile.inherits.length) console.log(`  Inherits: ${profile.inherits.join(', ')}`);
   if (!profile.files.length) console.log('  No files');
-  for (const file of profile.files) console.log(`  ${file.path}  ${file.size} bytes`);
+  for (const file of profile.files) console.log(`  ${file.path}  ${file.size} bytes  ·  updated ${file.updatedAt}`);
 }
 
 function printRun(run: Run) {

@@ -47,6 +47,10 @@ export const profileFileSchema = z.object({
   path: contextPathSchema,
   size: z.number().int().nonnegative(),
   storagePath: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  createdBy: z.string(),
+  updatedBy: z.string(),
 });
 
 export const profileSchema = z.object({
