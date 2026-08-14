@@ -170,6 +170,7 @@ function usage() {
   org member add <workspace> <firebase-uid> [admin|member]
   service connect <provider> --api-key-env <ENV_VAR> [--workspace <workspace>] [--name <name>] [--env <ENV_VAR>]
   service list [--workspace <workspace>]
+  service update <connection-id> [--name <name>] [--env <ENV_VAR>] [--api-key-env <ENV_VAR>]
   service remove <connection-id>
   profile service add <profile> <provider> <workspace|executing-user|specific|runtime> [connection-id]
   profile service remove <profile> <provider>
@@ -288,7 +289,19 @@ async function main() {
         console.log(`Removed service connection ${id}.`);
         return;
       }
-      throw new Error('Usage: runmount service connect | list | remove');
+      if (subcommand === 'update') {
+        const id = required(args[1], 'connection ID');
+        const flags = args.slice(2);
+        const displayName = optionValue(flags, '--name');
+        const environmentVariable = optionValue(flags, '--env');
+        const secretEnvironmentVariable = optionValue(flags, '--api-key-env');
+        const secret = secretEnvironmentVariable ? process.env[secretEnvironmentVariable] : undefined;
+        if (secretEnvironmentVariable && !secret) throw new Error(`${secretEnvironmentVariable} is not set in this shell.`);
+        if (!displayName && !environmentVariable && !secret) throw new Error('Provide --name, --env, or --api-key-env.');
+        printConnection(connectionSchema.parse(await api(`/v1/connections/${encoded(id)}`, {method: 'PATCH', body: JSON.stringify({displayName, environmentVariable, secret})})));
+        return;
+      }
+      throw new Error('Usage: runmount service connect | list | update | remove');
     }
     case 'profile': {
       const target = required(args[0], 'profile command');
